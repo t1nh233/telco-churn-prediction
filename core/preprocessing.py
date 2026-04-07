@@ -7,70 +7,76 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 import joblib
 
-# ---------------------------------------------------------
-# 0. THIẾT LẬP MÔI TRƯỜNG & THƯ MỤC
-# ---------------------------------------------------------
-# Xác định thư mục chứa file script này (thư mục 'core')
+## Tạo đường dẫn đến các thư mục
 current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Lùi lại 1 cấp để ra thư mục gốc của toàn bộ dự án
 project_root = os.path.dirname(current_dir)
 
-# Tạo các đường dẫn tuyệt đối chuẩn xác
-image_dir = os.path.join(project_root, 'images')
+images_dir = os.path.join(project_root, 'images')
 models_dir = os.path.join(project_root, 'models')
 processed_dir = os.path.join(project_root, 'data', 'processed')
 raw_data_path = os.path.join(project_root, 'data', 'raw', 'telco_customers_churn.csv')
 
-# Tạo thư mục (nằm ở cấp ngoài cùng của dự án)
-os.makedirs(image_dir, exist_ok=True)
+## Tạo các thư mục images, models, data/processed nếu chưa có
+os.makedirs(images_dir, exist_ok=True)
 os.makedirs(models_dir, exist_ok=True)
 os.makedirs(processed_dir, exist_ok=True)
+
+
 
 sns.set_theme(style="whitegrid", palette="husl")
 plt.rcParams["figure.dpi"] = 120
 
-print("Bắt đầu quy trình tiền xử lý dữ liệu...")
 
-# ---------------------------------------------------------
-# 1. LOAD DỮ LIỆU
-# ---------------------------------------------------------
-# Thay đổi đường dẫn này trỏ tới file csv trên máy tính của em
+#------------------------------------------------
+### LOAD DATASET
+#------------------------------------------------
+
+
+print("--------------------------Bắt đầu quy trình tiền xử lý số liệu--------------------------")
+
+## Mở file dataset nằm trong folder data/raw
 try:
     df = pd.read_csv(raw_data_path)
-    print("✅ Load thành công dữ liệu!")
+    print("Mở file dữ liệu thành công !!")
 except FileNotFoundError:
-    print(f"❌ Không tìm thấy file dữ liệu tại {raw_data_path}. Vui lòng kiểm tra lại!")
+    print(f"Không tìm thấy file tại đường dẫn {raw_data_path}. Vui lòng kiểm tra lại !!")
     exit()
 
-# ---------------------------------------------------------
-# 2. LÀM SẠCH DỮ LIỆU CƠ BẢN (DATA CLEANSING)
-# ---------------------------------------------------------
-# Xử lý TotalCharges
+
+#------------------------------------------------
+### CÁC BƯỚC LÀM SẠCH DỮ LIỆU
+#------------------------------------------------
+
+
+## Chuyển giá trị của đặc trưng TotalCharges thành dạng số (numeric), các giá trị không thể chuyển đổi gán giá trị NaN
 df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
+
+## Fill các giá trị NaN bằng giá trị 0
 df['TotalCharges'] = df['TotalCharges'].fillna(0)
 
-# Đưa Churn về 0/1
+## Đưa giá trị cột Churn về tương ứng Yes -> 1 / No -> 0
 df['Churn'] = (df['Churn'] == 'Yes').astype(int)
 
-# Xóa customerID
+## Xỏa bỏ cột customerID vì nó không mang lại information gain cho model
 df = df.drop(columns=['customerID'])
 
-print(f"Tỷ lệ Churn chung: {df['Churn'].mean():.2%}")
+## In ra tỷ lệ Churn so với No Churn trên toàn bộ tập dữ liệu (kiểm tra tính cân bằng của dữ liệu)
+print(f"Tỷ lệ Churn: {df['Churn'].mean():.2%}")
 
-# ---------------------------------------------------------
-# 3. TRỰC QUAN HÓA DỮ LIỆU (EDA) & LƯU ẢNH
-# ---------------------------------------------------------
-print("Đang vẽ và lưu các biểu đồ EDA...")
 
-# 3.1. Churn Distribution (Pie Chart)
+#------------------------------------------------
+### TRỰC QUAN HÓA DỮ LIỆU ĐỂ LỰA CHỌN CÁC ĐẶC TRƯNG PHÙ HỢP
+#------------------------------------------------
+
+
+## Vẽ biểu đồ tròn thể hiện tỷ lệ Churn sau đó lưu biểu đồ vào folder images
 plt.figure(figsize=(6,6))
 plt.pie(df['Churn'].value_counts(), labels=["No Churn","Churn"], autopct='%1.1f%%', startangle=90, shadow=True)
 plt.title("Churn Distribution")
-plt.savefig(os.path.join(image_dir, '01_churn_distribution.png'), bbox_inches='tight')
-plt.close() # Đóng plot để giải phóng RAM
+plt.savefig(os.path.join(images_dir, '01_churn_distribution.png'), bbox_inches='tight')
+plt.close()
 
-# 3.2. Categorical Features Bar Charts
+## Vẽ các biểu đồ cột của các đặc trưng không phải là numeric với tỷ lệ Churn cho từng giá trị của đặc trưng đó sau đó lưu biểu đồ vào folder images
 cat_cols = df.drop(columns=['Churn', 'TotalCharges', 'MonthlyCharges', 'tenure']).columns
 n_cols = len(cat_cols)
 n_rows = (n_cols + 2) // 3
@@ -96,10 +102,10 @@ for j in range(i + 1, len(axes)):
 
 plt.suptitle("Churn Rate & Sample Size Across Categorical Features", fontsize=16, fontweight="bold", y=1.01)
 plt.tight_layout()
-plt.savefig(os.path.join(image_dir, '02_categorical_churn.png'), bbox_inches='tight')
+plt.savefig(os.path.join(images_dir, '02_categorical_churn.png'), bbox_inches='tight')
 plt.close()
 
-# 3.3. Numeric Feature Distributions by Churn
+## Vẽ biểu đồ phân phối của Churn với từng giá trị của các đặc trưng numeric sau đó lưu biểu đồ vào folder images
 num_cols = ["tenure","MonthlyCharges","TotalCharges"]
 fig, axes = plt.subplots(1, 3, figsize=(15,4))
 for ax, col in zip(axes, num_cols):
@@ -110,10 +116,10 @@ for ax, col in zip(axes, num_cols):
     ax.legend()
 plt.suptitle("Numeric Feature Distributions by Churn", fontsize=14, fontweight="bold")
 plt.tight_layout()
-plt.savefig(os.path.join(image_dir, '03_numeric_distributions.png'), bbox_inches='tight')
+plt.savefig(os.path.join(images_dir, '03_numeric_distributions.png'), bbox_inches='tight')
 plt.close()
 
-# 3.4. Correlation Heatmap
+## Vẽ biểu đồ tương quan giữa các đặc trưng với nhau sau đó lưu biểu đồ vào folder images
 df_corr = df.copy()
 for c in df_corr.select_dtypes(include=["object", "string"]).columns:
     df_corr[c] = LabelEncoder().fit_transform(df_corr[c])
@@ -123,63 +129,64 @@ fig, ax = plt.subplots(figsize=(14,10))
 sns.heatmap(corr, mask=mask, annot=True, fmt=".2f", cmap="coolwarm", linewidths=0.5, ax=ax, annot_kws={"size":7})
 ax.set_title("Feature Correlation Heatmap", fontsize=14, fontweight="bold")
 plt.tight_layout()
-plt.savefig(os.path.join(image_dir, '04_correlation_heatmap.png'), bbox_inches='tight')
+plt.savefig(os.path.join(images_dir, '04_correlation_heatmap.png'), bbox_inches='tight')
 plt.close()
 
-print("✅ Đã lưu toàn bộ hình ảnh vào thư mục 'images/'")
+print("Đã vẽ thành công và lưu toàn bộ các biểu đồ vào thư mục 'images/'")
 
-# ---------------------------------------------------------
-# 4. FEATURE ENGINEERING & ENCODING
-# ---------------------------------------------------------
-# Lọc bỏ các đặc trưng nhiễu và đa cộng tuyến
+
+#------------------------------------------------
+### TRÍCH XUẤT VÀ MÃ HÓA CÁC ĐẶC TRƯNG (DỰA TRÊN CÁC BIỂU ĐỒ Ở TRÊN)
+#------------------------------------------------
+
+
+# Lọc bỏ các đặc trưng nhiễu (gender, MultipleLines và PhoneService) vì các đặc trưng này có hệ số tương quan rất thấp với label Churn nên không mang lại thông tin hữu ích (có thể gây nhiễu) 
+# và đa cộng tuyến (TotalCharges và tenure có hệ số tương quan với nhau rất cao)
 cols_to_drop = ['gender', 'TotalCharges', 'PhoneService', 'MultipleLines']
 df_model = df.drop(columns=cols_to_drop).copy()
 
-# Mã hóa nhị phân
+## Với các đặc trưng chứa giá trị nhị phân thì đưa về dạng 0 / 1 (như đã làm với Churn trước đó)
 binary_cols = [c for c in df_model.select_dtypes(include=["object", "string"]).columns if set(df_model[c].unique()) <= {"Yes","No"}]
 for c in binary_cols:
     df_model[c] = (df_model[c] == "Yes").astype(int)
 
-# One-Hot Encoding
+## One-hot encoding với các đặc trưng phân loại thành các đặc trưng nhị phân
 df_model = pd.get_dummies(df_model, drop_first=True)
-print(f"Kích thước ma trận X sau khi tối ưu: {df_model.shape}")
+print(f"Kích thước của bộ dữ liệu sau các bước tiền xử lý: {df_model.shape}")
 
-# ---------------------------------------------------------
-# 5. CHIA TẬP, CHUẨN HÓA VÀ LƯU TRỮ DƯỚI DẠNG CSV
-# ---------------------------------------------------------
-# Tách Features (X) và Target (y)
+
+#------------------------------------------------
+### CHIA TẬP DỮ LIỆU VÀ CHUẨN HÓA DỮ LIỆU
+#------------------------------------------------
+
+
+## Tach cac feature thanh X va label thanh y
 X = df_model.drop(columns=['Churn'])
 y = df_model['Churn']
 
-# Lưu lại danh sách tên cột để dùng sau khi chuẩn hóa
+## Luu lai danh sach ten cac feature
 feature_names = X.columns
 
-# Chia Train/Test (Chia xong chúng vẫn khớp nhau 100% theo index)
+## Chia thanh train va test set theo ti le 80/20
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Chuẩn hóa dữ liệu (Lưu ý: Đầu ra của scaler là Numpy Array)
+## Chuan hoa du lieu
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# --- BƯỚC LẮP RÁP LẠI THÀNH DATAFRAME ĐỂ XUẤT CSV ---
-# 1. Biến mảng Numpy thành DataFrame, gắn lại tên cột
+## Xuat ra file train va test
 df_train_final = pd.DataFrame(X_train_scaled, columns=feature_names)
 df_test_final = pd.DataFrame(X_test_scaled, columns=feature_names)
-
-# 2. Dán cột nhãn (y) vào lại (Phải dùng .values để bỏ index cũ, tránh lệch dòng)
 df_train_final['Churn'] = y_train.values
 df_test_final['Churn'] = y_test.values
-
-# 3. Xuất ra file CSV
 train_csv_path = os.path.join(processed_dir, 'train.csv')
 test_csv_path = os.path.join(processed_dir, 'test.csv')
-
 df_train_final.to_csv(train_csv_path, index=False)
 df_test_final.to_csv(test_csv_path, index=False)
 
-# Vẫn phải lưu scaler.pkl để ngày mai dự đoán khách hàng mới
+## Luu lai scaler
 joblib.dump(scaler, os.path.join(models_dir, 'scaler.pkl'))
 
-print("✅ Hoàn tất toàn bộ Data Pipeline!")
-print(f"Đã xuất file:\n- {train_csv_path}\n- {test_csv_path}\n- {os.path.join(models_dir, 'scaler.pkl')}")
+print("Hoàn tất quá trình tiền xử lý dữ liệu")
+print(f"Đã lưu thành công các file:\n- {train_csv_path}\n- {test_csv_path}\n- {os.path.join(models_dir, 'scaler.pkl')}")
