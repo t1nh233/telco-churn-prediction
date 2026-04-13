@@ -54,6 +54,8 @@ df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
 ## Fill các giá trị NaN bằng giá trị 0
 df['TotalCharges'] = df['TotalCharges'].fillna(0)
 
+df.replace(["No internet service", "No phone service"], "No", inplace=True)
+
 ## Đưa giá trị cột Churn về tương ứng Yes -> 1 / No -> 0
 df['Churn'] = (df['Churn'] == 'Yes').astype(int)
 
